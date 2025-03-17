@@ -1,0 +1,9 @@
+KouriChat-Downloader 0.1.0 是一款 KouriChat的自动下载部署器
+
+Dev By Elimir
+
+项目地址：https://github.com/1Eliver/KouriChat-Downloader
+
+KouriChat主仓库地址：https://github.com/KouriChat/KouriChat
+
+本软件永久开源免费，如果你是付费购买的，说明你被骗了。
