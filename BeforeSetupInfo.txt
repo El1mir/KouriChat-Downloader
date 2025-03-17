@@ -1,3 +1,7 @@
+请不要把本程序安装到Program Files目录下，否则会导致无法正常运行。
+
+最好不要安装到C盘，否则会导致无法正常运行。
+
 KouriChat-Downloader 0.1.0 是一款 KouriChat的自动下载部署器
 
 Dev By Elimir

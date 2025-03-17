@@ -1,6 +1,7 @@
 using KouriChat_Downloader.Utils.PythonTools;
 using System.Diagnostics;
 using KouriChat_Downloader.Utils;
+using System.Net.Http;
 
 namespace KouriChat_Downloader
 {
@@ -235,17 +236,36 @@ namespace KouriChat_Downloader
 
                             // 检查Git依赖
                             UpdateUI("检查环境依赖...", 25);
-                            if (!await CheckAndInstallDependenciesAsync())
-                            {
-                                return;
-                            }
+                            bool gitAvailable = await CheckGitInstalledAsync(false, true);
 
-                            UpdateUI("正在克隆项目文件", 50);
-                            bool cloneSuccess = await manager.CloneRepositoryAsync("https://github.com/1Eliver/KouriChat-dev.git", branch, projectDir);
-                            if (!cloneSuccess)
+                            if (gitAvailable)
                             {
-                                UpdateUI("克隆项目失败，请检查网络连接或Git配置", 50);
-                                throw new Exception("克隆项目失败，请检查网络连接或Git配置");
+                                // 使用Git克隆
+                                UpdateUI("正在克隆项目文件", 50);
+                                bool cloneSuccess = await manager.CloneRepositoryAsync("https://github.com/1Eliver/KouriChat-dev.git", branch, projectDir);
+                                if (!cloneSuccess)
+                                {
+                                    // Git克隆失败，尝试ZIP下载
+                                    UpdateUI("克隆项目失败，尝试ZIP下载方式...", 50);
+                                    Logger.Log("Git克隆失败，切换到ZIP下载方式");
+                                    bool zipSuccess = await DeployFromGitHubZipAsync(projectDir, branch);
+                                    if (!zipSuccess)
+                                    {
+                                        UpdateUI("部署项目失败，请检查网络连接", 0);
+                                        throw new Exception("部署项目失败，请检查网络连接");
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                // 直接使用ZIP下载
+                                UpdateUI("使用ZIP下载方式部署项目...", 50);
+                                bool zipSuccess = await DeployFromGitHubZipAsync(projectDir, branch);
+                                if (!zipSuccess)
+                                {
+                                    UpdateUI("部署项目失败，请检查网络连接", 0);
+                                    throw new Exception("部署项目失败，请检查网络连接");
+                                }
                             }
                             _repoCloned = true;
                         }
@@ -331,11 +351,11 @@ namespace KouriChat_Downloader
             }
         }
 
-        private async Task<bool> CheckAndInstallDependenciesAsync()
+        private async Task<bool> CheckAndInstallDependenciesAsync(bool showGitWarning = true)
         {
             // 检查git是否已安装
-            bool gitInstalled = await CheckGitInstalledAsync();
-            if (!gitInstalled)
+            bool gitInstalled = await CheckGitInstalledAsync(showGitWarning);
+            if (!gitInstalled && showGitWarning)
             {
                 UpdateUI("未检测到Git，请先安装Git并确保添加到PATH环境变量", 25);
                 MessageBox.Show("未检测到Git。请先安装Git并将其添加到系统PATH中，然后重试。\n可以从 https://git-scm.com/downloads 下载Git。",
@@ -343,10 +363,10 @@ namespace KouriChat_Downloader
                 return false;
             }
 
-            return true;
+            return gitInstalled || !showGitWarning;
         }
 
-        private async Task<bool> CheckGitInstalledAsync()
+        private async Task<bool> CheckGitInstalledAsync(bool showWarning = false, bool autoSwitch = false)
         {
             try
             {
@@ -366,26 +386,44 @@ namespace KouriChat_Downloader
                     string output = await process.StandardOutput.ReadToEndAsync();
                     await process.WaitForExitAsync();
 
-                    // 记录Git版本，验证是否正常工作
-                    Console.WriteLine($"Git版本: {output}");
+                    Logger.Log($"Git版本检测结果: {output.Trim()}");
+
+                    if (process.ExitCode != 0)
+                    {
+                        if (showWarning && !autoSwitch)
+                        {
+                            this.Invoke(() =>
+                            {
+                                MessageBox.Show("未检测到Git。请先安装Git并将其添加到系统PATH中，然后重试。\n可以从 https://git-scm.com/downloads 下载Git。",
+                                       "缺少Git", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            });
+                        }
+                        else if (autoSwitch)
+                        {
+                            Logger.Log("未检测到Git，将自动使用ZIP下载方式");
+                            UpdateUI("未检测到Git，将使用ZIP下载方式", 25);
+                        }
+                    }
+
                     return process.ExitCode == 0;
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Git检测异常: {ex.Message}");
-                // 尝试查找Git的几个常见安装位置
-                string[] commonPaths = {
-                    @"C:\Program Files\Git\cmd\git.exe",
-                    @"C:\Program Files (x86)\Git\cmd\git.exe"
-                };
+                Logger.Log($"Git检测异常: {ex.Message}");
 
-                foreach (var path in commonPaths)
+                if (showWarning && !autoSwitch)
                 {
-                    if (File.Exists(path))
+                    this.Invoke(() =>
                     {
-                        Console.WriteLine($"找到Git安装路径: {path}，但未添加到环境变量");
-                    }
+                        MessageBox.Show("未检测到Git。请先安装Git并将其添加到系统PATH中，然后重试。\n可以从 https://git-scm.com/downloads 下载Git。",
+                               "缺少Git", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    });
+                }
+                else if (autoSwitch)
+                {
+                    Logger.Log("Git检测异常，将自动使用ZIP下载方式");
+                    UpdateUI("Git检测异常，将使用ZIP下载方式", 25);
                 }
 
                 return false;
@@ -421,7 +459,7 @@ namespace KouriChat_Downloader
             }
         }
 
-        private void CheckExistingComponents()
+        private async Task CheckExistingComponents()
         {
             try
             {
@@ -429,55 +467,31 @@ namespace KouriChat_Downloader
                 string pythonDir = Path.Combine(baseDir, ".python");
                 string projectDir = Path.Combine(baseDir, "KouriChat");
 
-                // 检测Python
-                if (manager.TryDetectExistingPython(pythonDir, out string pythonPath))
+                // 检查Python
+                if (Directory.Exists(pythonDir))
                 {
-                    _pythonInstalled = true;
-                    _pythonPath = pythonPath;
-                    // 仅记录日志，不更新UI
-                    Logger.Log($"已检测到Python环境: {_pythonPath}");
-                }
-
-                // 检测仓库
-                if (Directory.Exists(projectDir) &&
-                    Directory.GetFiles(projectDir, "*", SearchOption.AllDirectories).Length > 0)
-                {
-                    _repoCloned = true;
-                    // 仅记录日志，不更新UI
-                    Logger.Log("已检测到克隆的项目");
-
-                    // 检测依赖项
-                    string requirementsPath = Path.Combine(projectDir, "requirements.txt");
-                    if (File.Exists(requirementsPath))
+                    var pythonFiles = Directory.GetFiles(pythonDir, "python.exe", SearchOption.AllDirectories);
+                    if (pythonFiles.Length > 0)
                     {
-                        // 检查是否已安装依赖 (简单检测几个常见模块文件)
-                        string sitePackagesDir = Path.Combine(pythonDir, "Lib", "site-packages");
-                        if (Directory.Exists(sitePackagesDir))
-                        {
-                            string[] dependencyIndicators = { "flask", "requests", "werkzeug" };
-                            bool allFound = true;
-                            foreach (var dep in dependencyIndicators)
-                            {
-                                if (!Directory.Exists(Path.Combine(sitePackagesDir, dep)))
-                                {
-                                    allFound = false;
-                                    break;
-                                }
-                            }
-
-                            if (allFound)
-                            {
-                                _dependenciesInstalled = true;
-                                // 仅记录日志，不更新UI
-                                Logger.Log("依赖已安装");
-                            }
-                        }
+                        _pythonPath = pythonFiles[0];
+                        _pythonInstalled = true;
+                        Logger.Log($"找到已安装的Python: {_pythonPath}");
                     }
                 }
+
+                // 检查项目目录
+                if (Directory.Exists(projectDir) && Directory.GetFiles(projectDir, "*", SearchOption.AllDirectories).Any())
+                {
+                    _repoCloned = true;
+                    Logger.Log("找到已克隆的项目目录");
+                }
+
+                // 不在启动时检查Git，只在实际需要使用时检查
+                // 这一行注释掉或删除：await CheckGitInstalledAsync();
             }
             catch (Exception ex)
             {
-                Logger.Log($"检测已有组件时出错: {ex.Message}");
+                Logger.Log($"检查现有组件时出错: {ex.Message}");
             }
         }
 
@@ -955,52 +969,67 @@ pause
             {
                 try
                 {
-                    // 检查Git是否安装
-                    if (!await CheckGitInstalledAsync())
+                    // 先检查是否可以使用Git更新，但不显示警告
+                    bool gitInstalled = await CheckGitInstalledAsync();
+                    // 如果需要检查其他依赖但不显示Git警告，可以这样调用
+                    // await CheckAndInstallDependenciesAsync(false);
+
+                    bool isGitRepo = false;
+
+                    if (gitInstalled)
                     {
-                        this.Invoke(() =>
+                        isGitRepo = await CheckIsGitRepositoryAsync(projectDir);
+
+                        if (isGitRepo)
                         {
-                            MessageBox.Show("未检测到Git。请先安装Git并将其添加到系统PATH中，然后重试。\n可以从 https://git-scm.com/downloads 下载Git。",
-                                           "缺少Git", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                        });
-                        return;
+                            // 如果Git可用且是Git仓库，使用Git更新
+                            UpdateUI("使用Git更新项目...", 25);
+                            Logger.Log("使用Git方式更新项目...");
+
+                            // 执行git pull命令更新代码
+                            bool updateSuccess = await UpdateRepositoryAsync(projectDir);
+                            if (updateSuccess)
+                            {
+                                UpdateUI("项目更新成功", 100);
+                                Logger.Log("Git更新成功");
+                                this.Invoke(() =>
+                                {
+                                    MessageBox.Show("项目已更新到最新版本", "更新成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                                });
+
+                                // 更新恢复按钮状态并退出方法
+                                this.Invoke(RestoreButtons);
+                                return;
+                            }
+
+                            // Git更新失败，转为ZIP方式更新
+                            UpdateUI("Git更新失败，尝试ZIP下载方式...", 30);
+                            Logger.Log("Git更新失败，切换到ZIP下载方式");
+                        }
                     }
 
-                    UpdateUI("正在更新项目...", 25);
-                    Logger.Log("开始从远程仓库更新项目...");
+                    // Git不可用或不是Git仓库，使用ZIP更新
+                    UpdateUI("准备使用ZIP下载方式更新...", 25);
+                    Logger.Log("使用ZIP下载方式更新项目...");
 
-                    // 检查是否是Git仓库
-                    bool isGitRepo = await CheckIsGitRepositoryAsync(projectDir);
-                    if (!isGitRepo)
-                    {
-                        UpdateUI("当前项目不是Git仓库，无法更新", 0);
-                        Logger.Log("当前项目不是Git仓库，无法更新");
-                        this.Invoke(() =>
-                        {
-                            MessageBox.Show("当前项目不是有效的Git仓库，无法更新。\n请尝试清理项目后重新部署。",
-                                           "更新失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        });
-                        return;
-                    }
-
-                    // 执行git pull命令更新代码
-                    bool updateSuccess = await UpdateRepositoryAsync(projectDir);
-                    if (updateSuccess)
+                    // 使用ZIP文件方式更新
+                    bool zipUpdateSuccess = await UpdateFromGitHubZipAsync(projectDir);
+                    if (zipUpdateSuccess)
                     {
                         UpdateUI("项目更新成功", 100);
-                        Logger.Log("项目更新成功");
+                        Logger.Log("ZIP更新成功");
                         this.Invoke(() =>
                         {
-                            MessageBox.Show("项目已更新到最新版本", "更新成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            MessageBox.Show("项目已通过ZIP下载更新到最新版本", "更新成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
                         });
                     }
                     else
                     {
                         UpdateUI("项目更新失败", 0);
-                        Logger.Log("项目更新失败");
+                        Logger.Log("ZIP更新失败");
                         this.Invoke(() =>
                         {
-                            MessageBox.Show("项目更新失败，可能存在冲突或网络问题", "更新失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                            MessageBox.Show("项目更新失败，请检查网络连接或尝试清理后重新部署", "更新失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
                         });
                     }
                 }
@@ -1016,22 +1045,201 @@ pause
                 finally
                 {
                     // 恢复按钮状态
-                    this.Invoke(() =>
-                    {
-                        button1.Enabled = true;
-                        button2.Enabled = true;
-                        button3.Enabled = true;
-                        foreach (Control ctrl in Controls)
-                        {
-                            if (ctrl is Button btn && btn.Text == "清理项目")
-                            {
-                                btn.Enabled = true;
-                                break;
-                            }
-                        }
-                    });
+                    this.Invoke(RestoreButtons);
                 }
             });
+        }
+
+        private void RestoreButtons()
+        {
+            button1.Enabled = true;
+            button2.Enabled = true;
+            button3.Enabled = true;
+            foreach (Control ctrl in Controls)
+            {
+                if (ctrl is Button btn && btn.Text == "清理项目")
+                {
+                    btn.Enabled = true;
+                    break;
+                }
+            }
+        }
+
+        private async Task<bool> UpdateFromGitHubZipAsync(string projectDir)
+        {
+            try
+            {
+                UpdateUI("准备从GitHub下载最新版本...", 30);
+
+                // 从comboBox中获取当前分支
+                string branch = "main"; // 默认分支
+                this.Invoke(() =>
+                {
+                    if (comboBox1.SelectedItem != null)
+                    {
+                        branch = comboBox1.SelectedItem.ToString();
+                    }
+                });
+
+                // 构建GitHub ZIP下载URL (对于私有仓库可能需要身份验证)
+                string repoOwner = "1Eliver";
+                string repoName = "KouriChat-dev";
+                string zipUrl = $"https://github.com/{repoOwner}/{repoName}/archive/refs/heads/{branch}.zip";
+
+                UpdateUI("正在下载最新代码...", 40);
+                Logger.Log($"从 {zipUrl} 下载最新代码");
+
+                // 创建临时目录
+                string tempDir = Path.Combine(Path.GetTempPath(), $"KouriChat_Update_{Guid.NewGuid()}");
+                Directory.CreateDirectory(tempDir);
+                string zipPath = Path.Combine(tempDir, "update.zip");
+
+                // 下载ZIP文件
+                using (var httpClient = new HttpClient())
+                {
+                    // 增加超时时间，GitHub有时候下载较慢
+                    httpClient.Timeout = TimeSpan.FromMinutes(5);
+
+                    using (var response = await httpClient.GetAsync(zipUrl, HttpCompletionOption.ResponseHeadersRead))
+                    {
+                        response.EnsureSuccessStatusCode();
+
+                        // 流式下载，避免内存压力
+                        using (var fileStream = new FileStream(zipPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                        {
+                            await response.Content.CopyToAsync(fileStream);
+                        }
+                    }
+                }
+
+                Logger.Log("ZIP文件下载完成，准备解压");
+                UpdateUI("下载完成，正在解压文件...", 60);
+
+                // 解压ZIP文件到临时目录
+                string extractPath = Path.Combine(tempDir, "extracted");
+                Directory.CreateDirectory(extractPath);
+
+                System.IO.Compression.ZipFile.ExtractToDirectory(zipPath, extractPath, true);
+
+                // 在解压后的目录中查找实际的项目文件夹
+                // GitHub ZIP通常将内容放在一个以"repoName-branch"命名的子文件夹中
+                string[] extractedDirs = Directory.GetDirectories(extractPath);
+                if (extractedDirs.Length == 0)
+                {
+                    Logger.Log("解压后找不到有效的项目目录");
+                    return false;
+                }
+
+                string extractedProjectDir = extractedDirs[0]; // 通常只有一个目录
+                Logger.Log($"找到解压后的项目目录: {extractedProjectDir}");
+
+                // 询问用户如何处理本地修改
+                DialogResult handleLocalChanges = DialogResult.Yes;
+                this.Invoke(() =>
+                {
+                    handleLocalChanges = MessageBox.Show(
+                        "更新可能会覆盖您本地的修改。\n\n是否要保留本地已修改的文件？\n\n" +
+                        "· 选择\"是\"将保留本地已修改的文件\n" +
+                        "· 选择\"否\"将使用远程文件覆盖所有本地修改",
+                        "处理本地修改",
+                        MessageBoxButtons.YesNo,
+                        MessageBoxIcon.Question);
+                });
+
+                UpdateUI("正在应用更新...", 80);
+
+                // 备份当前项目配置文件
+                string configBackupDir = Path.Combine(tempDir, "config_backup");
+                Directory.CreateDirectory(configBackupDir);
+
+                // 如果用户选择保留本地修改，创建本地修改文件的备份
+                if (handleLocalChanges == DialogResult.Yes)
+                {
+                    Logger.Log("备份本地配置文件");
+
+                    // 要保留的文件列表（通常是配置文件、日志、数据文件等）
+                    string[] filesToPreserve = {
+                        "run_config_web.py",
+                        "run_web.py",
+                        "config.json",
+                        "app.db",
+                        "*.log"
+                    };
+
+                    foreach (string filePattern in filesToPreserve)
+                    {
+                        foreach (string filePath in Directory.GetFiles(projectDir, filePattern, SearchOption.AllDirectories))
+                        {
+                            string relativePath = filePath.Substring(projectDir.Length + 1);
+                            string backupPath = Path.Combine(configBackupDir, relativePath);
+
+                            // 确保目标目录存在
+                            Directory.CreateDirectory(Path.GetDirectoryName(backupPath));
+
+                            File.Copy(filePath, backupPath, true);
+                            Logger.Log($"已备份文件: {relativePath}");
+                        }
+                    }
+                }
+
+                // 复制新文件到项目目录
+                Logger.Log("正在复制新文件到项目目录");
+                CopyDirectory(extractedProjectDir, projectDir, handleLocalChanges == DialogResult.Yes ? configBackupDir : null);
+
+                // 清理临时文件
+                try
+                {
+                    Directory.Delete(tempDir, true);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Log($"清理临时文件时出错（非致命）: {ex.Message}");
+                }
+
+                Logger.Log("ZIP更新完成");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"从ZIP更新时出错: {ex.Message}");
+                return false;
+            }
+        }
+
+        private void CopyDirectory(string sourceDir, string targetDir, string preserveFromDir = null)
+        {
+            // 确保目标目录存在
+            Directory.CreateDirectory(targetDir);
+
+            // 复制所有文件
+            foreach (string filePath in Directory.GetFiles(sourceDir, "*", SearchOption.AllDirectories))
+            {
+                string relativePath = filePath.Substring(sourceDir.Length + 1);
+                string destPath = Path.Combine(targetDir, relativePath);
+
+                // 确保目标目录存在
+                Directory.CreateDirectory(Path.GetDirectoryName(destPath));
+
+                // 检查是否需要保留此文件
+                bool shouldPreserve = false;
+                if (preserveFromDir != null)
+                {
+                    string preservePath = Path.Combine(preserveFromDir, relativePath);
+                    if (File.Exists(preservePath))
+                    {
+                        // 这个文件在备份中存在，使用备份版本
+                        File.Copy(preservePath, destPath, true);
+                        Logger.Log($"保留了本地修改: {relativePath}");
+                        shouldPreserve = true;
+                    }
+                }
+
+                if (!shouldPreserve)
+                {
+                    // 这个文件不需要保留，使用新版本
+                    File.Copy(filePath, destPath, true);
+                }
+            }
         }
 
         private async Task<bool> CheckIsGitRepositoryAsync(string directory)
@@ -1126,6 +1334,90 @@ pause
             catch (Exception ex)
             {
                 Logger.Log($"更新仓库时出错: {ex.Message}");
+                return false;
+            }
+        }
+
+        private async Task<bool> DeployFromGitHubZipAsync(string projectDir, string branch)
+        {
+            try
+            {
+                UpdateUI("准备从GitHub下载最新版本...", 30);
+
+                // 构建GitHub ZIP下载URL
+                string repoOwner = "1Eliver";
+                string repoName = "KouriChat-dev";
+                string zipUrl = $"https://github.com/{repoOwner}/{repoName}/archive/refs/heads/{branch}.zip";
+
+                UpdateUI("正在下载项目代码...", 40);
+                Logger.Log($"从 {zipUrl} 下载项目代码");
+
+                // 创建临时目录
+                string tempDir = Path.Combine(Path.GetTempPath(), $"KouriChat_Deploy_{Guid.NewGuid()}");
+                Directory.CreateDirectory(tempDir);
+                string zipPath = Path.Combine(tempDir, "deploy.zip");
+
+                // 下载ZIP文件
+                using (var httpClient = new HttpClient())
+                {
+                    // 增加超时时间，GitHub有时候下载较慢
+                    httpClient.Timeout = TimeSpan.FromMinutes(5);
+
+                    using (var response = await httpClient.GetAsync(zipUrl, HttpCompletionOption.ResponseHeadersRead))
+                    {
+                        response.EnsureSuccessStatusCode();
+
+                        // 流式下载，避免内存压力
+                        using (var fileStream = new FileStream(zipPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                        {
+                            await response.Content.CopyToAsync(fileStream);
+                        }
+                    }
+                }
+
+                Logger.Log("ZIP文件下载完成，准备解压");
+                UpdateUI("下载完成，正在解压文件...", 60);
+
+                // 解压ZIP文件到临时目录
+                string extractPath = Path.Combine(tempDir, "extracted");
+                Directory.CreateDirectory(extractPath);
+
+                System.IO.Compression.ZipFile.ExtractToDirectory(zipPath, extractPath, true);
+
+                // 在解压后的目录中查找实际的项目文件夹
+                string[] extractedDirs = Directory.GetDirectories(extractPath);
+                if (extractedDirs.Length == 0)
+                {
+                    Logger.Log("解压后找不到有效的项目目录");
+                    return false;
+                }
+
+                string extractedProjectDir = extractedDirs[0]; // 通常只有一个目录
+                Logger.Log($"找到解压后的项目目录: {extractedProjectDir}");
+
+                // 确保目标目录存在
+                Directory.CreateDirectory(projectDir);
+
+                // 复制所有文件到项目目录
+                UpdateUI("正在复制项目文件...", 80);
+                CopyDirectory(extractedProjectDir, projectDir);
+
+                // 清理临时文件
+                try
+                {
+                    Directory.Delete(tempDir, true);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Log($"清理临时文件时出错（非致命）: {ex.Message}");
+                }
+
+                Logger.Log("ZIP部署完成");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"从ZIP部署时出错: {ex.Message}");
                 return false;
             }
         }
