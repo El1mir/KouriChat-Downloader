@@ -850,15 +850,34 @@ if os.path.exists(scripts_dir) and scripts_dir not in sys.path:
             }
 
             // 增强依赖安装的日志输出
-            public async Task<bool> InstallPackagesWithLogging(string pythonPath, string requirementsPath, string targetDir)
+            public async Task<bool> InstallPackagesWithLogging(string pythonPath, string requirementsPath, string targetDir, List<string> pipSources)
             {
                 Logger.Log("开始安装Python包，这可能需要几分钟时间...");
-                
+
+                string selectedSource = string.Empty;
+
+                // 测试所有 pip 源，选择第一个可用的源
+                foreach (var source in pipSources)
+                {
+                    selectedSource = await TestPipSource(pythonPath, source);
+                    if (!string.IsNullOrEmpty(selectedSource))
+                    {
+                        Logger.Log($"选择可用的 pip 源: {selectedSource}");
+                        break;
+                    }
+                }
+
+                if (string.IsNullOrEmpty(selectedSource))
+                {
+                    Logger.Log("没有可用的 pip 源，安装失败。");
+                    return false;
+                }
+
                 try
                 {
-                    // 构建命令（添加-v参数获取更详细的输出）
-                    string arguments = $"-m pip install -r \"{requirementsPath}\" --no-cache-dir --target=\"{targetDir}\" -v";
-                    
+                    // 构建命令（使用测试成功的源）
+                    string arguments = $"-m pip install -r \"{requirementsPath}\" --no-cache-dir --target=\"{targetDir}\" --index-url {selectedSource} --trusted-host {new Uri(selectedSource).Host} -v";
+
                     var processInfo = new ProcessStartInfo
                     {
                         FileName = pythonPath,
@@ -868,29 +887,29 @@ if os.path.exists(scripts_dir) and scripts_dir not in sys.path:
                         UseShellExecute = false,
                         CreateNoWindow = true
                     };
-                    
+
                     using (var process = new Process { StartInfo = processInfo })
                     {
                         process.Start();
-                        
+
                         // 实时读取输出并记录日志
-                        process.OutputDataReceived += (sender, e) => 
+                        process.OutputDataReceived += (sender, e) =>
                         {
                             if (!string.IsNullOrEmpty(e.Data))
                                 Logger.Log($"安装输出: {e.Data}");
                         };
-                        
-                        process.ErrorDataReceived += (sender, e) => 
+
+                        process.ErrorDataReceived += (sender, e) =>
                         {
                             if (!string.IsNullOrEmpty(e.Data))
                                 Logger.Log($"安装错误: {e.Data}");
                         };
-                        
+
                         process.BeginOutputReadLine();
                         process.BeginErrorReadLine();
-                        
+
                         await process.WaitForExitAsync();
-                        
+
                         Logger.Log($"安装进程已退出，代码: {process.ExitCode}");
                         return process.ExitCode == 0;
                     }
@@ -899,6 +918,58 @@ if os.path.exists(scripts_dir) and scripts_dir not in sys.path:
                 {
                     Logger.Log($"安装包时出错: {ex.Message}");
                     return false;
+                }
+            }
+
+            public async Task<string> TestPipSource(string pythonPath, string sourceUrl)
+            {
+                Logger.Log($"开始测试 pip 源: {sourceUrl}");
+
+                try
+                {
+                    // 构建测试命令
+                    string arguments = $"-m pip install --no-cache-dir --index-url {sourceUrl} --trusted-host {new Uri(sourceUrl).Host} pip -v";
+
+                    var processInfo = new ProcessStartInfo
+                    {
+                        FileName = pythonPath,
+                        Arguments = arguments,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    };
+
+                    using (var process = new Process { StartInfo = processInfo })
+                    {
+                        process.Start();
+
+                        // 实时读取输出并记录日志
+                        process.OutputDataReceived += (sender, e) =>
+                        {
+                            if (!string.IsNullOrEmpty(e.Data))
+                                Logger.Log($"测试输出: {e.Data}");
+                        };
+
+                        process.ErrorDataReceived += (sender, e) =>
+                        {
+                            if (!string.IsNullOrEmpty(e.Data))
+                                Logger.Log($"测试错误: {e.Data}");
+                        };
+
+                        process.BeginOutputReadLine();
+                        process.BeginErrorReadLine();
+
+                        await process.WaitForExitAsync();
+
+                        Logger.Log($"测试进程已退出，代码: {process.ExitCode}");
+                        return process.ExitCode == 0 ? sourceUrl : string.Empty;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Log($"测试 pip 源时出错: {ex.Message}");
+                    return string.Empty;
                 }
             }
         }

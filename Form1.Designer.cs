@@ -39,16 +39,19 @@
             textBox1 = new TextBox();
             groupBox4 = new GroupBox();
             textBox2 = new TextBox();
+            groupBox5 = new GroupBox();
+            button3 = new Button();
             groupBox1.SuspendLayout();
             groupBox2.SuspendLayout();
             groupBox3.SuspendLayout();
             groupBox4.SuspendLayout();
+            groupBox5.SuspendLayout();
             SuspendLayout();
             // 
             // groupBox1
             // 
             groupBox1.Controls.Add(comboBox1);
-            groupBox1.Location = new Point(12, 71);
+            groupBox1.Location = new Point(12, 147);
             groupBox1.Name = "groupBox1";
             groupBox1.Size = new Size(308, 58);
             groupBox1.TabIndex = 0;
@@ -67,7 +70,7 @@
             // groupBox2
             // 
             groupBox2.Controls.Add(comboBox2);
-            groupBox2.Location = new Point(12, 135);
+            groupBox2.Location = new Point(12, 211);
             groupBox2.Name = "groupBox2";
             groupBox2.Size = new Size(308, 63);
             groupBox2.TabIndex = 1;
@@ -85,7 +88,7 @@
             // 
             // button1
             // 
-            button1.Location = new Point(12, 204);
+            button1.Location = new Point(12, 280);
             button1.Name = "button1";
             button1.Size = new Size(308, 23);
             button1.TabIndex = 2;
@@ -95,7 +98,7 @@
             // 
             // progressBar1
             // 
-            progressBar1.Location = new Point(12, 233);
+            progressBar1.Location = new Point(12, 309);
             progressBar1.Name = "progressBar1";
             progressBar1.Size = new Size(308, 23);
             progressBar1.TabIndex = 3;
@@ -104,7 +107,7 @@
             // groupBox3
             // 
             groupBox3.Controls.Add(button2);
-            groupBox3.Location = new Point(12, 291);
+            groupBox3.Location = new Point(12, 367);
             groupBox3.Name = "groupBox3";
             groupBox3.Size = new Size(308, 51);
             groupBox3.TabIndex = 4;
@@ -123,7 +126,7 @@
             // 
             // textBox1
             // 
-            textBox1.Location = new Point(12, 262);
+            textBox1.Location = new Point(12, 338);
             textBox1.Name = "textBox1";
             textBox1.ReadOnly = true;
             textBox1.Size = new Size(308, 23);
@@ -133,7 +136,7 @@
             // groupBox4
             // 
             groupBox4.Controls.Add(textBox2);
-            groupBox4.Location = new Point(12, 5);
+            groupBox4.Location = new Point(12, 81);
             groupBox4.Name = "groupBox4";
             groupBox4.Size = new Size(308, 60);
             groupBox4.TabIndex = 6;
@@ -148,11 +151,32 @@
             textBox2.TabIndex = 0;
             textBox2.Text = "https://github.com/1Eliver/KouriChat-dev";
             // 
+            // groupBox5
+            // 
+            groupBox5.Controls.Add(button3);
+            groupBox5.Location = new Point(12, 12);
+            groupBox5.Name = "groupBox5";
+            groupBox5.Size = new Size(308, 63);
+            groupBox5.TabIndex = 7;
+            groupBox5.TabStop = false;
+            groupBox5.Text = "扩展设置区";
+            // 
+            // button3
+            // 
+            button3.Location = new Point(6, 22);
+            button3.Name = "button3";
+            button3.Size = new Size(75, 35);
+            button3.TabIndex = 0;
+            button3.Text = "更新项目";
+            button3.UseVisualStyleBackColor = true;
+            button3.Click += button3_Click;
+            // 
             // Form1
             // 
             AutoScaleDimensions = new SizeF(7F, 17F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(332, 402);
+            ClientSize = new Size(332, 492);
+            Controls.Add(groupBox5);
             Controls.Add(groupBox4);
             Controls.Add(textBox1);
             Controls.Add(groupBox3);
@@ -168,6 +192,7 @@
             groupBox3.ResumeLayout(false);
             groupBox4.ResumeLayout(false);
             groupBox4.PerformLayout();
+            groupBox5.ResumeLayout(false);
             ResumeLayout(false);
             PerformLayout();
         }
@@ -184,5 +209,7 @@
         private Button button2;
         private TextBox textBox1;
         private GroupBox groupBox4;
+        private GroupBox groupBox5;
+        private Button button3;
     }
 }

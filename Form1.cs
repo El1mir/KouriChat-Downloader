@@ -692,7 +692,16 @@ namespace KouriChat_Downloader
                 bool installResult = await manager.InstallPackagesWithLogging(
                     _pythonPath,
                     requirementsPath,
-                    sitePackagesDir);
+                    sitePackagesDir,
+                    new List<string> {
+                        "https://mirrors.aliyun.com/pypi/simple",
+                        "https://pypi.tuna.tsinghua.edu.cn/simple",
+                        "https://repo.huaweicloud.com/repository/pypi/simple",
+                        "https://mirrors.cloud.tencent.com/pypi/simple",
+                        "https://pypi.mirrors.ustc.edu.cn/simple",
+                        "https://pypi.org/simple"
+                    }
+                    );
 
                 if (!installResult)
                 {
@@ -914,6 +923,211 @@ pause
         {
             // 这是ProgressBar1的Click事件处理程序
             // 通常可以留空，除非需要特定功能
+        }
+
+        private void button3_Click(object sender, EventArgs e)
+        {
+            string baseDir = Application.StartupPath;
+            string projectDir = Path.Combine(baseDir, "KouriChat");
+
+            // 检查项目是否已经存在
+            if (!Directory.Exists(projectDir) || !Directory.GetFiles(projectDir, "*", SearchOption.AllDirectories).Any())
+            {
+                MessageBox.Show("本地项目不存在，请先部署项目", "无法更新", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // 禁用操作按钮
+            button1.Enabled = false;
+            button2.Enabled = false;
+            button3.Enabled = false;
+            foreach (Control ctrl in Controls)
+            {
+                if (ctrl is Button btn && btn.Text == "清理项目")
+                {
+                    btn.Enabled = false;
+                    break;
+                }
+            }
+
+            // 异步执行更新操作
+            Task.Run(async () =>
+            {
+                try
+                {
+                    // 检查Git是否安装
+                    if (!await CheckGitInstalledAsync())
+                    {
+                        this.Invoke(() =>
+                        {
+                            MessageBox.Show("未检测到Git。请先安装Git并将其添加到系统PATH中，然后重试。\n可以从 https://git-scm.com/downloads 下载Git。",
+                                           "缺少Git", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        });
+                        return;
+                    }
+
+                    UpdateUI("正在更新项目...", 25);
+                    Logger.Log("开始从远程仓库更新项目...");
+
+                    // 检查是否是Git仓库
+                    bool isGitRepo = await CheckIsGitRepositoryAsync(projectDir);
+                    if (!isGitRepo)
+                    {
+                        UpdateUI("当前项目不是Git仓库，无法更新", 0);
+                        Logger.Log("当前项目不是Git仓库，无法更新");
+                        this.Invoke(() =>
+                        {
+                            MessageBox.Show("当前项目不是有效的Git仓库，无法更新。\n请尝试清理项目后重新部署。",
+                                           "更新失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        });
+                        return;
+                    }
+
+                    // 执行git pull命令更新代码
+                    bool updateSuccess = await UpdateRepositoryAsync(projectDir);
+                    if (updateSuccess)
+                    {
+                        UpdateUI("项目更新成功", 100);
+                        Logger.Log("项目更新成功");
+                        this.Invoke(() =>
+                        {
+                            MessageBox.Show("项目已更新到最新版本", "更新成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        });
+                    }
+                    else
+                    {
+                        UpdateUI("项目更新失败", 0);
+                        Logger.Log("项目更新失败");
+                        this.Invoke(() =>
+                        {
+                            MessageBox.Show("项目更新失败，可能存在冲突或网络问题", "更新失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    UpdateUI("更新时发生错误", 0);
+                    Logger.Log($"更新项目时出错: {ex.Message}");
+                    this.Invoke(() =>
+                    {
+                        MessageBox.Show($"更新项目时出错: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    });
+                }
+                finally
+                {
+                    // 恢复按钮状态
+                    this.Invoke(() =>
+                    {
+                        button1.Enabled = true;
+                        button2.Enabled = true;
+                        button3.Enabled = true;
+                        foreach (Control ctrl in Controls)
+                        {
+                            if (ctrl is Button btn && btn.Text == "清理项目")
+                            {
+                                btn.Enabled = true;
+                                break;
+                            }
+                        }
+                    });
+                }
+            });
+        }
+
+        private async Task<bool> CheckIsGitRepositoryAsync(string directory)
+        {
+            try
+            {
+                var processStartInfo = new ProcessStartInfo
+                {
+                    FileName = "git",
+                    Arguments = "rev-parse --is-inside-work-tree",
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WorkingDirectory = directory
+                };
+
+                using (var process = new Process { StartInfo = processStartInfo })
+                {
+                    process.Start();
+                    string output = await process.StandardOutput.ReadToEndAsync();
+                    await process.WaitForExitAsync();
+
+                    return process.ExitCode == 0 && output.Trim() == "true";
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"检查Git仓库时出错: {ex.Message}");
+                return false;
+            }
+        }
+
+        private async Task<bool> UpdateRepositoryAsync(string directory)
+        {
+            try
+            {
+                UpdateUI("正在检查远程变更...", 50);
+
+                // 先执行git fetch获取远程更新
+                var fetchInfo = new ProcessStartInfo
+                {
+                    FileName = "git",
+                    Arguments = "fetch",
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WorkingDirectory = directory
+                };
+
+                using (var fetchProcess = new Process { StartInfo = fetchInfo })
+                {
+                    fetchProcess.Start();
+                    await fetchProcess.WaitForExitAsync();
+
+                    if (fetchProcess.ExitCode != 0)
+                    {
+                        Logger.Log("获取远程仓库信息失败");
+                        return false;
+                    }
+                }
+
+                UpdateUI("正在应用更新...", 75);
+
+                // 然后执行git pull更新本地代码
+                var pullInfo = new ProcessStartInfo
+                {
+                    FileName = "git",
+                    Arguments = "pull",
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WorkingDirectory = directory
+                };
+
+                using (var pullProcess = new Process { StartInfo = pullInfo })
+                {
+                    pullProcess.Start();
+                    string output = await pullProcess.StandardOutput.ReadToEndAsync();
+                    string error = await pullProcess.StandardError.ReadToEndAsync();
+                    await pullProcess.WaitForExitAsync();
+
+                    Logger.Log($"Git pull输出: {output}");
+                    if (!string.IsNullOrEmpty(error))
+                        Logger.Log($"Git pull错误: {error}");
+
+                    return pullProcess.ExitCode == 0;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"更新仓库时出错: {ex.Message}");
+                return false;
+            }
         }
     }
 }
