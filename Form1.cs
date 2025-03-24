@@ -8,8 +8,6 @@ namespace KouriChat_Downloader
     public partial class Form1 : Form
     {
         private PythonEnvironmentManager manager = new PythonEnvironmentManager();
-        private TextBox textBox2;
-        private Button btnViewLog;
         private bool _pythonInstalled = false;
         private bool _repoCloned = false;
         private bool _dependenciesInstalled = false;
@@ -19,30 +17,8 @@ namespace KouriChat_Downloader
         {
             InitializeComponent();
 
-            // 创建查看日志按钮
-            btnViewLog = new Button
-            {
-                Text = "查看日志",
-                Dock = DockStyle.Bottom,
-                Height = 30
-            };
-            btnViewLog.Click += btnViewLog_Click;
-            this.Controls.Add(btnViewLog);
-
-            // 添加日志显示框
-            textBox2 = new TextBox
-            {
-                Multiline = true,
-                ReadOnly = true,
-                ScrollBars = ScrollBars.Vertical,
-                Dock = DockStyle.Bottom,
-                Height = 150,
-                Visible = false // 初始隐藏
-            };
-            this.Controls.Add(textBox2);
-
             // 初始化日志系统
-            Logger.Initialize(textBox2);
+            Logger.Initialize(textBoxLog);
             Logger.Log("程序启动...");
 
             // 启动时检测已安装的Python和项目状态
@@ -54,19 +30,10 @@ namespace KouriChat_Downloader
 
         private void Form1_Load(object sender, EventArgs e)
         {
-            // 添加清理功能按钮
-            Button btnCleanup = new Button
-            {
-                Text = "清理项目",
-                Dock = DockStyle.Bottom,
-                Height = 30
-            };
-            btnCleanup.Click += (s, ev) => CleanupProject();
-            this.Controls.Add(btnCleanup);
-
             Load_ComboBox();
         }
 
+        // 添加Load_ComboBox方法
         private void Load_ComboBox()
         {
             // 初始化combo box
@@ -82,6 +49,23 @@ namespace KouriChat_Downloader
             comboBox2.Items.Add("3.10.9");
             comboBox2.Items.Add("3.9.13");
             comboBox2.SelectedItem = "3.11.9";
+        }
+
+        // 清理项目按钮点击事件
+        private void btnCleanup_Click(object sender, EventArgs e)
+        {
+            string baseDir = Application.StartupPath;
+            string projectDir = Path.Combine(baseDir, "KouriChat");
+            string pythonDir = Path.Combine(baseDir, ".python");
+
+            // 检查项目或Python环境是否存在
+            if (!Directory.Exists(projectDir) && !Directory.Exists(pythonDir))
+            {
+                MessageBox.Show("没有找到需要清理的项目或Python环境", "无法清理", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            CleanupProject();
         }
 
         private void button2_Click(object sender, EventArgs e)
@@ -106,14 +90,7 @@ namespace KouriChat_Downloader
             // 禁用所有操作按钮
             button1.Enabled = false;
             button2.Enabled = false;
-            foreach (Control ctrl in Controls)
-            {
-                if (ctrl is Button btn && btn.Text == "清理项目")
-                {
-                    btn.Enabled = false;
-                    break;
-                }
-            }
+            btnCleanup.Enabled = false;
 
             // 在后台线程启动脚本
             Task.Run(() =>
@@ -140,14 +117,7 @@ namespace KouriChat_Downloader
                     {
                         button1.Enabled = true;
                         button2.Enabled = true;
-                        foreach (Control ctrl in Controls)
-                        {
-                            if (ctrl is Button btn && btn.Text == "清理项目")
-                            {
-                                btn.Enabled = true;
-                                break;
-                            }
-                        }
+                        btnCleanup.Enabled = true;
                     });
                 }
                 catch (Exception ex)
@@ -157,14 +127,7 @@ namespace KouriChat_Downloader
                     {
                         button1.Enabled = true;
                         button2.Enabled = true;
-                        foreach (Control ctrl in Controls)
-                        {
-                            if (ctrl is Button btn && btn.Text == "清理项目")
-                            {
-                                btn.Enabled = true;
-                                break;
-                            }
-                        }
+                        btnCleanup.Enabled = true;
 
                         MessageBox.Show($"启动项目时出错:\n{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     });
@@ -194,14 +157,7 @@ namespace KouriChat_Downloader
             // 禁用所有操作按钮
             button1.Enabled = false;
             button2.Enabled = false;
-            foreach (Control ctrl in Controls)
-            {
-                if (ctrl is Button btn && btn.Text == "清理项目")
-                {
-                    btn.Enabled = false;
-                    break;
-                }
-            }
+            btnCleanup.Enabled = false;
 
             try
             {
@@ -301,14 +257,7 @@ namespace KouriChat_Downloader
                         {
                             button1.Enabled = true;
                             button2.Enabled = true;
-                            foreach (Control ctrl in Controls)
-                            {
-                                if (ctrl is Button btn && btn.Text == "清理项目")
-                                {
-                                    btn.Enabled = true;
-                                    break;
-                                }
-                            }
+                            btnCleanup.Enabled = true;
                         });
                     }
                     catch (Exception ex)
@@ -318,14 +267,7 @@ namespace KouriChat_Downloader
                         {
                             button1.Enabled = true;
                             button2.Enabled = true;
-                            foreach (Control ctrl in Controls)
-                            {
-                                if (ctrl is Button btn && btn.Text == "清理项目")
-                                {
-                                    btn.Enabled = true;
-                                    break;
-                                }
-                            }
+                            btnCleanup.Enabled = true;
 
                             MessageBox.Show($"发生错误\n{ex.Message}\n发生在：\n{ex.StackTrace}\n请联系开发人员解决",
                                            "运行时发生错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -338,14 +280,7 @@ namespace KouriChat_Downloader
                 // 启用按钮
                 button1.Enabled = true;
                 button2.Enabled = true;
-                foreach (Control ctrl in Controls)
-                {
-                    if (ctrl is Button btn && btn.Text == "清理项目")
-                    {
-                        btn.Enabled = true;
-                        break;
-                    }
-                }
+                btnCleanup.Enabled = true;
 
                 MessageBox.Show($"启动任务失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
@@ -442,23 +377,6 @@ namespace KouriChat_Downloader
             progressBar1.Value = progressValue;
         }
 
-        private void btnViewLog_Click(object sender, EventArgs e)
-        {
-            // 显示或隐藏日志区域
-            textBox2.Visible = !textBox2.Visible;
-            btnViewLog.Text = textBox2.Visible ? "隐藏日志" : "查看日志";
-
-            // 调整窗体大小
-            if (textBox2.Visible)
-            {
-                this.Height += textBox2.Height;
-            }
-            else
-            {
-                this.Height -= textBox2.Height;
-            }
-        }
-
         private async Task CheckExistingComponents()
         {
             try
@@ -507,14 +425,8 @@ namespace KouriChat_Downloader
             // 禁用所有操作按钮
             button1.Enabled = false;
             button2.Enabled = false;
-            foreach (Control ctrl in Controls)
-            {
-                if (ctrl is Button btn && btn.Text == "清理项目")
-                {
-                    btn.Enabled = false;
-                    break;
-                }
-            }
+            button3.Enabled = false;
+            btnCleanup.Enabled = false;
 
             try
             {
@@ -616,28 +528,16 @@ namespace KouriChat_Downloader
                 // 在完成后启用按钮
                 button1.Enabled = true;
                 button2.Enabled = true;
-                foreach (Control ctrl in Controls)
-                {
-                    if (ctrl is Button btn && btn.Text == "清理项目")
-                    {
-                        btn.Enabled = true;
-                        break;
-                    }
-                }
+                button3.Enabled = true;
+                btnCleanup.Enabled = true;
             }
             catch (Exception ex)
             {
                 // 出错时也要启用按钮
-                button1.Enabled = false;
-                button2.Enabled = false;
-                foreach (Control ctrl in Controls)
-                {
-                    if (ctrl is Button btn && btn.Text == "清理项目")
-                    {
-                        btn.Enabled = true;
-                        break;
-                    }
-                }
+                button1.Enabled = true;
+                button2.Enabled = true;
+                button3.Enabled = true;
+                btnCleanup.Enabled = true;
 
                 Logger.Log($"清理项目时出错: {ex.Message}");
                 MessageBox.Show($"清理项目时出错: {ex.Message}\n可能需要以管理员身份运行程序或手动删除文件", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -955,14 +855,7 @@ pause
             button1.Enabled = false;
             button2.Enabled = false;
             button3.Enabled = false;
-            foreach (Control ctrl in Controls)
-            {
-                if (ctrl is Button btn && btn.Text == "清理项目")
-                {
-                    btn.Enabled = false;
-                    break;
-                }
-            }
+            btnCleanup.Enabled = false;
 
             // 异步执行更新操作
             Task.Run(async () =>
@@ -1055,14 +948,7 @@ pause
             button1.Enabled = true;
             button2.Enabled = true;
             button3.Enabled = true;
-            foreach (Control ctrl in Controls)
-            {
-                if (ctrl is Button btn && btn.Text == "清理项目")
-                {
-                    btn.Enabled = true;
-                    break;
-                }
-            }
+            btnCleanup.Enabled = true;
         }
 
         private async Task<bool> UpdateFromGitHubZipAsync(string projectDir)

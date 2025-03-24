@@ -37,10 +37,12 @@
             groupBox3 = new GroupBox();
             button2 = new Button();
             textBox1 = new TextBox();
-            groupBox4 = new GroupBox();
             textBox2 = new TextBox();
+            groupBox4 = new GroupBox();
             groupBox5 = new GroupBox();
             button3 = new Button();
+            textBoxLog = new TextBox();
+            btnCleanup = new Button();
             groupBox1.SuspendLayout();
             groupBox2.SuspendLayout();
             groupBox3.SuspendLayout();
@@ -133,6 +135,14 @@
             textBox1.TabIndex = 5;
             textBox1.TextChanged += textBox1_TextChanged;
             // 
+            // textBox2
+            // 
+            textBox2.Location = new Point(6, 21);
+            textBox2.Name = "textBox2";
+            textBox2.Size = new Size(296, 23);
+            textBox2.TabIndex = 0;
+            textBox2.Text = "https://github.com/1Eliver/KouriChat-dev";
+            // 
             // groupBox4
             // 
             groupBox4.Controls.Add(textBox2);
@@ -142,14 +152,6 @@
             groupBox4.TabIndex = 6;
             groupBox4.TabStop = false;
             groupBox4.Text = "填写仓库URL";
-            // 
-            // textBox2
-            // 
-            textBox2.Location = new Point(6, 21);
-            textBox2.Name = "textBox2";
-            textBox2.Size = new Size(296, 23);
-            textBox2.TabIndex = 0;
-            textBox2.Text = "https://github.com/1Eliver/KouriChat-dev";
             // 
             // groupBox5
             // 
@@ -171,11 +173,33 @@
             button3.UseVisualStyleBackColor = true;
             button3.Click += button3_Click;
             // 
+            // textBoxLog
+            // 
+            textBoxLog.Location = new Point(12, 424);
+            textBoxLog.Multiline = true;
+            textBoxLog.Name = "textBoxLog";
+            textBoxLog.ReadOnly = true;
+            textBoxLog.ScrollBars = ScrollBars.Vertical;
+            textBoxLog.Size = new Size(308, 133);
+            textBoxLog.TabIndex = 8;
+            // 
+            // btnCleanup
+            // 
+            btnCleanup.Location = new Point(12, 563);
+            btnCleanup.Name = "btnCleanup";
+            btnCleanup.Size = new Size(308, 23);
+            btnCleanup.TabIndex = 9;
+            btnCleanup.Text = "清理项目";
+            btnCleanup.UseVisualStyleBackColor = true;
+            btnCleanup.Click += btnCleanup_Click;
+            // 
             // Form1
             // 
             AutoScaleDimensions = new SizeF(7F, 17F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(332, 492);
+            ClientSize = new Size(332, 598);
+            Controls.Add(btnCleanup);
+            Controls.Add(textBoxLog);
             Controls.Add(groupBox5);
             Controls.Add(groupBox4);
             Controls.Add(textBox1);
@@ -184,6 +208,7 @@
             Controls.Add(button1);
             Controls.Add(groupBox2);
             Controls.Add(groupBox1);
+            MinimumSize = new Size(348, 600);
             Name = "Form1";
             Text = "KouriChat-Downloader";
             Load += Form1_Load;
@@ -209,7 +234,10 @@
         private Button button2;
         private TextBox textBox1;
         private GroupBox groupBox4;
+        private TextBox textBox2;
         private GroupBox groupBox5;
         private Button button3;
+        private TextBox textBoxLog;
+        private Button btnCleanup;
     }
 }
